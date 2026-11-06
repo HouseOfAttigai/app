@@ -1,0 +1,111 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>Stock Ledger</title><link rel="manifest" href="manifest.json"><meta name="theme-color" content="#0f766e">
+<style>
+:root{--bg:#f4f6f8;--card:#fff;--tx:#14181f;--mu:#667085;--ac:#0f766e;--bd:#e2e6ea;--bad:#b42318}
+@media(prefers-color-scheme:dark){:root{--bg:#0e1116;--card:#171b22;--tx:#e7eaee;--mu:#98a2b3;--ac:#2dd4bf;--bd:#262c36;--bad:#f97066}}
+*{box-sizing:border-box}body{margin:0;font:15px system-ui,sans-serif;background:var(--bg);color:var(--tx);padding-top:env(safe-area-inset-top)}
+header{position:sticky;top:0;display:flex;justify-content:space-between;align-items:center;padding:10px 14px;background:var(--card);border-bottom:1px solid var(--bd);z-index:5}
+header label{display:flex;align-items:center;gap:8px;margin:0}
+#ed{appearance:none;-webkit-appearance:none;width:44px;height:24px;border-radius:12px;background:var(--bd);position:relative;margin:0;padding:0}#ed:checked{background:var(--ac)}
+#ed:before{content:"";position:absolute;top:2px;left:2px;width:20px;height:20px;border-radius:50%;background:#fff;transition:.2s}#ed:checked:before{left:22px}
+main{padding:12px 14px 96px;max-width:720px;margin:auto}h3{margin:18px 0 6px}
+nav{position:fixed;bottom:0;left:0;right:0;display:flex;background:var(--card);border-top:1px solid var(--bd);padding-bottom:env(safe-area-inset-bottom);z-index:6}
+nav button{flex:1;padding:13px 2px;border:0;background:none;color:var(--mu);font:inherit;font-size:13px}nav .on{color:var(--ac);font-weight:700}
+.c{display:flex;justify-content:space-between;align-items:center;gap:10px;background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:10px 12px;margin:8px 0}
+.mu{color:var(--mu);font-size:13px}.bad{color:var(--bad)}.chip{background:var(--bd);border-radius:8px;padding:2px 8px;font-size:12px}
+input,select{width:100%;padding:10px;border:1px solid var(--bd);border-radius:10px;background:var(--card);color:var(--tx);font:inherit;margin:4px 0 8px}
+label{display:block;font-size:13px;color:var(--mu)}.ck{display:flex;align-items:center;gap:8px;color:var(--tx)}.ck input{width:auto;margin:0}
+button.p,.p2{background:var(--ac);color:#fff;border:0;border-radius:10px;padding:10px 14px;font:inherit;font-weight:600;margin:6px 0}
+button.g{background:var(--card);color:var(--tx);border:1px solid var(--bd);border-radius:10px;padding:9px 12px;font:inherit;margin:4px 0}
+.r{display:flex;gap:8px;align-items:center}.n{width:74px!important}
+.md{display:none;position:fixed;inset:0;background:#0008;align-items:flex-end;z-index:20}#m2{z-index:30}
+.sh{background:var(--bg);width:100%;max-height:92vh;overflow:auto;border-radius:18px 18px 0 0;padding:14px 14px calc(20px + env(safe-area-inset-bottom))}
+.th{width:48px;height:48px;object-fit:cover;border-radius:8px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}.gi{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:8px;display:flex;flex-direction:column;font-size:13px}.gi img,.ph{width:100%;height:100px;object-fit:cover;border-radius:8px;background:var(--bd)}
+.kp{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:10px 0}.kp div{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:10px;display:flex;flex-direction:column}.kp b{font-size:18px}
+#toast{display:none;position:fixed;bottom:84px;left:50%;transform:translateX(-50%);background:#1d2330;color:#fff;padding:10px 16px;border-radius:20px;z-index:40;max-width:90%}
+#off{display:none;background:#fde68a;color:#78350f;text-align:center;padding:4px;font-size:13px}.mi{display:block;width:100%;text-align:left}
+</style></head><body>
+<header><b>Stock Ledger</b><label>Edit <input type="checkbox" id="ed" onchange="tog(this)"></label></header>
+<div id="off">Offline: showing saved data</div><main id="v"></main><nav id="nav"></nav><div id="m" class="md"></div><div id="m2" class="md"></div><div id="toast"></div>
+<script>
+let U=localStorage.u,T=localStorage.t,D={},C={},edit=false,pin='',cur='home',q='',off=0,LS,OS,OL,PS,PL,P={f:'',t:''};
+const $=s=>document.querySelector(s),V={},SC={home:'Home',orders:'Orders',inventory:'Inventory',profit:'Profit',catalog:'Catalog',prospects:'Prospects',purchases:'Purchases',suppliers:'Suppliers',customers:'Customers',settings:'Settings'};
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const m=x=>'₹'+Math.round(+x||0).toLocaleString('en-IN'),b=v=>v===true||v=='TRUE';
+const today=()=>new Date(Date.now()-new Date().getTimezoneOffset()*6e4).toISOString().slice(0,10);
+P={f:today().slice(0,8)+'01',t:today()};
+const pu=u=>{const x=/\/d\/([\w-]+)|[?&]id=([\w-]+)/.exec(u||'');return x?'https://drive.google.com/thumbnail?id='+(x[1]||x[2])+'&sz=w600':u||''};
+const toast=e=>{const t=$('#toast');t.textContent=e;t.style.display='block';setTimeout(()=>t.style.display='none',2800)};
+const modal=(h,i='#m')=>{$(i).innerHTML=`<div class="sh">${h}<button class="g" onclick="closeM('${i}')">Close</button></div>`;$(i).style.display='flex'};
+const closeM=(i='#m')=>$(i).style.display='none';
+async function api(a,x={}){const r=await fetch(U,{method:'POST',body:JSON.stringify({t:T,pin,a,...x})}).then(r=>r.json());if(r.error)throw r.error;return r}
+async function load(){try{D=await api('all');localStorage.d=JSON.stringify(D);off=0}catch(e){if(!localStorage.d)return toast(e);D=JSON.parse(localStorage.d);off=1}
+ C=Object.fromEntries(D.Config.map(r=>[r.key,r.value]));render()}
+const cust=id=>D.Customers.find(c=>c.id==id)||{name:id,phone:''},sku=id=>D.SKU_Master.find(s=>s.sku==id)||{name:id,sku:id},sup=id=>D.Suppliers.find(s=>s.id==id)||{name:id||'-'};
+function stock(){const k={};D.Purchase_Lines.forEach(l=>{const o=k[l.sku]||(k[l.sku]={q:0,v:0});o.q+=+l.remaining;o.v+=l.remaining*l.landed});return k}
+const card=(t,s,r='',x='')=>`<div class="c" ${x}><div><b>${t}</b><div class="mu">${s}</div></div><div style="text-align:right">${r}</div></div>`;
+const fil=(a,f=r=>Object.values(r).join(' '))=>a.filter(r=>!q||f(r).toLowerCase().includes(q.toLowerCase()));
+const wrap=f=>{LS=f;return `<input placeholder="Search" value="${esc(q)}" oninput="q=this.value;$('#l').innerHTML=LS()"><div id="l">${f()}</div>`};
+function render(){const n=Math.min(5,Math.max(2,+C.tabCount||3)),tabs=String(C.tabs||'home,orders,profit').split(',').slice(0,n);
+ $('#nav').innerHTML=tabs.map(t=>`<button class="${t==cur?'on':''}" onclick="go('${t}')">${SC[t]}</button>`).join('')+`<button class="${tabs.includes(cur)?'':'on'}" onclick="menu()">☰ Menu</button>`;
+ $('#ed').checked=edit;$('#off').style.display=off?'block':'none';$('#v').innerHTML=(V[cur]||V.home)()}
+function go(t){cur=t;q='';render();scrollTo(0,0)}
+function menu(){modal(Object.keys(SC).map(k=>`<button class="g mi" onclick="closeM();go('${k}')">${SC[k]}</button>`).join(''))}
+async function tog(el){if(!el.checked){edit=false;pin='';return render()}const p=prompt('Edit PIN');if(!p){el.checked=false;return}pin=p;try{await api('chk');edit=true}catch(e){pin='';el.checked=false;toast(e)}render()}
+const F={Suppliers:[['name','Name*'],['phone','Phone'],['address','Address'],['products','Products'],['notes','Notes']],
+Customers:[['name','Name*'],['phone','Phone*'],['address','Address']],
+Prospects:[['name','Product*'],['supplier','Supplier','sel'],['link','Link'],['notes','Notes'],['margin','Margin OK','chk'],['demand','Demand OK','chk'],['supplierOk','Supplier OK','chk']],
+SKU_Master:[['name','Name'],['photo','Photo','photo'],['price','Standard price','num'],['reorder','Reorder level','num'],['show','Show to customer','chk']]};
+function form(n,id){const k=n=='SKU_Master'?'sku':'id',r=id?D[n].find(x=>x[k]==id):{};if(!edit&&!(n=='Customers'&&!id))return toast('Turn on Edit mode');
+ modal(`<h3>${id?'Edit':'New'}</h3>`+F[n].map(([f,l,t])=>{const v=r[f]??'';
+  if(t=='chk')return `<label class="ck"><input type="checkbox" data-f="${f}" ${b(v)?'checked':''}> ${l}</label>`;
+  if(t=='sel')return `<label>${l}<select data-f="${f}"><option value="">-</option>${D.Suppliers.map(s=>`<option value="${s.id}" ${s.id==v?'selected':''}>${esc(s.name)}</option>`).join('')}</select></label>`;
+  if(t=='photo')return `<label>${l}<input data-f="${f}" id="ph" value="${esc(v)}" placeholder="Paste Drive link"></label><input type="file" accept="image/*" onchange="up(this)">${v?`<img src="${pu(v)}" class="th">`:''}`;
+  return `<label>${l}<input data-f="${f}" ${t=='num'?'type="number"':''} value="${esc(v)}"></label>`}).join('')+`<button class="p" onclick="save('${n}','${id||''}')">Save</button>`)}
+async function save(n,id){const k=n=='SKU_Master'?'sku':'id',row={};
+ document.querySelectorAll('#m [data-f]').forEach(e=>row[e.dataset.f]=e.type=='checkbox'?e.checked:e.type=='number'?+e.value:e.value);
+ if(F[n][0][1].includes('*')&&!row.name)return toast('Name is required');if(n=='Customers'&&!row.phone)return toast('Phone is required');
+ if(row.photo)row.photo=pu(row.photo);if(id)row[k]=id;
+ try{await api('put',{sheet:n,row});closeM();await load()}catch(e){toast(e)}}
+async function up(inp){const f=inp.files[0];if(!f)return;toast('Uploading photo…');const im=await createImageBitmap(f),k=Math.min(1,800/Math.max(im.width,im.height)),c=document.createElement('canvas');c.width=im.width*k;c.height=im.height*k;c.getContext('2d').drawImage(im,0,0,c.width,c.height);
+ try{const r=await api('photo',{b64:c.toDataURL('image/jpeg',.7).split(',')[1],mime:'image/jpeg',name:'sku-'+Date.now()+'.jpg'});$('#ph').value=r.url;toast('Photo uploaded. Press Save.')}catch(e){toast(e)}}
+async function en(id){if(!edit)return toast('Turn on Edit mode');try{const r=await api('enable',{id});toast('Created '+r.sku);await load()}catch(e){toast(e)}}
+V.home=()=>{const o=D.Orders,pp=o.filter(x=>!b(x.paid)),pd=o.filter(x=>!b(x.delivered)),st=stock(),low=D.SKU_Master.filter(s=>s.reorder>0&&(st[s.sku]?.q||0)<=s.reorder);
+ const row=x=>card(`${x.id} · ${esc(cust(x.customer).name)}`,`${x.date} · ${esc(x.status)}`,m(x.total),`onclick="od('${x.id}')"`);
+ return `<h3>Pending payments (${pp.length}) · ${m(pp.reduce((s,x)=>s+ +x.total,0))}</h3>${pp.map(row).join('')||'<p class="mu">Nothing pending</p>'}<h3>Pending deliveries (${pd.length})</h3>${pd.map(row).join('')||'<p class="mu">Nothing pending</p>'}<h3>Low stock (${low.length})</h3>${low.map(s=>card(esc(s.name),s.sku,`<span class="bad">${st[s.sku]?.q||0} left</span>`)).join('')||'<p class="mu">All SKUs above reorder level</p>'}`};
+V.orders=()=>`<button class="p" onclick="newOrder()">+ New order</button>`+wrap(()=>fil(D.Orders.slice().reverse(),r=>r.id+cust(r.customer).name+cust(r.customer).phone).map(x=>card(`${x.id} · ${esc(cust(x.customer).name)}`,x.date,m(x.total)+`<br><span class="chip">${esc(x.status)}</span>`,`onclick="od('${x.id}')"`)).join('')||'<p class="mu">No orders yet</p>');
+function od(id){const x=D.Orders.find(o=>o.id==id),ls=D.Order_Lines.filter(l=>l.order==id);
+ modal(`<h3>${id} · ${esc(cust(x.customer).name)}</h3><div class="mu">${x.date} · ${esc(cust(x.customer).phone)}</div>`+ls.map(l=>card(esc(sku(l.sku).name),`${l.qty} × ${m(l.price)}`,m(l.qty*l.price))).join('')+`<p>Discount ${m(x.discount)} · Delivery ${m(x.delivery)}<br><b>Total ${m(x.total)}</b></p><label class="ck"><input type="checkbox" id="pd" ${b(x.paid)?'checked':''}> Paid</label><label class="ck"><input type="checkbox" id="dl" ${b(x.delivered)?'checked':''}> Delivered</label><button class="p" onclick="spd('${id}')">Update</button>`)}
+async function spd(id){try{await api('setpd',{id,paid:$('#pd').checked,delivered:$('#dl').checked});closeM();await load()}catch(e){toast(e)}}
+function newOrder(){OS={date:today(),dtype:'%',disc:0,del:0};OL=[];
+ modal(`<h3>New order</h3><label>Customer (name or phone)<input list="cl" oninput="OS.cn=this.value"></label><datalist id="cl">${D.Customers.map(c=>`<option value="${esc(c.name)} · ${esc(c.phone)}">`).join('')}</datalist><label>Date<input type="date" value="${OS.date}" onchange="OS.date=this.value"></label><button class="p" onclick="pick()">+ Add item</button><div id="ol"></div><div class="r"><select oninput="OS.dtype=this.value;tt()"><option>%</option><option value="v">₹</option></select><input type="number" placeholder="Discount" oninput="OS.disc=+this.value;tt()"><input type="number" placeholder="Delivery charge" oninput="OS.del=+this.value;tt()"></div><label class="ck"><input type="checkbox" onchange="OS.paid=this.checked"> Paid</label><label class="ck"><input type="checkbox" onchange="OS.dl=this.checked"> Delivered</label><h3 id="tt"></h3><button class="p" onclick="so()">Save order</button>`);rl()}
+function pick(){modal(`<input placeholder="Search SKU or name" oninput="pg(this.value)"><div id="pg" class="grid"></div>`,'#m2');pg('')}
+function pg(v){const st=stock();$('#pg').innerHTML=D.SKU_Master.filter(s=>b(s.show)&&(s.sku+s.name).toLowerCase().includes(v.toLowerCase())).map(s=>`<div class="gi" onclick="ai('${s.sku}')">${s.photo?`<img src="${pu(s.photo)}">`:'<div class="ph"></div>'}<b>${esc(s.name)}</b><span class="mu">${s.sku} · ${m(s.price)} · ${st[s.sku]?.q||0} in stock</span></div>`).join('')||'<p class="mu">No SKUs are shown to customers yet</p>'}
+function ai(k){OL.push({sku:k,qty:1,price:+sku(k).price||0});closeM('#m2');rl()}
+function rl(){$('#ol').innerHTML=OL.map((l,i)=>`<div class="r"><span style="flex:1">${esc(sku(l.sku).name)}</span><input type="number" class="n" value="${l.qty}" oninput="OL[${i}].qty=+this.value;tt()"><input type="number" class="n" value="${l.price}" oninput="OL[${i}].price=+this.value;tt()"><button class="g" onclick="OL.splice(${i},1);rl()">✕</button></div>`).join('');tt()}
+function tt(){const s=OL.reduce((t,l)=>t+l.qty*l.price,0),d=OS.dtype=='%'?s*OS.disc/100:OS.disc;$('#tt').textContent='Total '+m(s-d+OS.del)}
+async function so(){const c=D.Customers.find(c=>OS.cn==`${c.name} · ${c.phone}`||OS.cn==String(c.phone)||OS.cn==c.name);if(!c)return toast('Pick a customer from the list');if(!OL.length)return toast('Add items');
+ try{const r=await api('order',{customer:c.id,date:OS.date,dtype:OS.dtype,disc:OS.disc,delivery:OS.del,paid:OS.paid,delivered:OS.dl,lines:OL});closeM();toast('Saved '+r.id);await load()}catch(e){toast(e)}}
+V.purchases=()=>`<button class="p" onclick="newPurchase()">+ New purchase</button>`+wrap(()=>fil(D.Purchases.slice().reverse(),r=>r.id+sup(r.supplier).name).map(x=>card(`${x.id} · ${esc(sup(x.supplier).name)}`,x.date,m(x.total))).join('')||'<p class="mu">No purchases yet</p>');
+function newPurchase(){if(!edit)return toast('Turn on Edit mode');PS={date:today(),mode:'excl',del:0,misc:0};PL=[];
+ modal(`<h3>New purchase</h3><label>Date<input type="date" value="${PS.date}" onchange="PS.date=this.value"></label><label>Supplier<select oninput="PS.sup=this.value"><option value="">-</option>${D.Suppliers.map(s=>`<option value="${s.id}">${esc(s.name)}</option>`).join('')}</select></label><button class="p" onclick="PL.push({sku:D.SKU_Master[0]?.sku,qty:1,price:0});rp()">+ Add item</button><div id="pl"></div><label>Delivery charge<input type="number" oninput="PS.del=+this.value;pt()"></label><label>Delivery is<select oninput="PS.mode=this.value;pt()"><option value="excl">Exclusive (added on top)</option><option value="incl">Inclusive (already in prices)</option></select></label><label>Misc charges<input type="number" oninput="PS.misc=+this.value;pt()"></label><div id="pt" class="mu"></div><button class="p" onclick="sp()">Save purchase</button>`);rp()}
+function rp(){$('#pl').innerHTML=PL.map((l,i)=>`<div class="r"><select style="flex:1" oninput="PL[${i}].sku=this.value">${D.SKU_Master.map(s=>`<option value="${s.sku}" ${s.sku==l.sku?'selected':''}>${esc(s.name)}</option>`).join('')}</select><input type="number" class="n" value="${l.qty}" oninput="PL[${i}].qty=+this.value;pt()"><input type="number" class="n" placeholder="cost" value="${l.price||''}" oninput="PL[${i}].price=+this.value;pt()"><button class="g" onclick="PL.splice(${i},1);rp()">✕</button></div>`).join('');pt()}
+function pt(){const it=PL.reduce((s,l)=>s+l.qty*l.price,0),ex=PS.misc+(PS.mode=='excl'?PS.del:0);$('#pt').textContent=`Items ${m(it)} · Extra ${m(ex)} · Bill ${m(it+ex)}`}
+async function sp(){if(!PL.length)return toast('Add items');try{await api('purchase',{date:PS.date,supplier:PS.sup||'',mode:PS.mode,delivery:PS.del,misc:PS.misc,lines:PL});closeM();toast('Purchase saved');await load()}catch(e){toast(e)}}
+V.catalog=()=>wrap(()=>fil(D.SKU_Master,r=>r.sku+r.name).map(s=>`<div class="c" onclick="form('SKU_Master','${s.sku}')"><div class="r">${s.photo?`<img src="${pu(s.photo)}" class="th">`:''}<div><b>${esc(s.name)}</b><div class="mu">${s.sku} · ${m(s.price)} · reorder at ${s.reorder||0}</div></div></div><span class="chip">${b(s.show)?'Shown':'Hidden'}</span></div>`).join('')||'<p class="mu">No SKUs yet. Enable a prospect to create one.</p>');
+V.prospects=()=>`<button class="p" onclick="form('Prospects')">+ New prospect</button>`+wrap(()=>fil(D.Prospects.slice().reverse(),r=>r.name+sup(r.supplier).name).map(x=>`<div class="c"><div onclick="form('Prospects','${x.id}')"><b>${esc(x.name)}</b><div class="mu">${esc(sup(x.supplier).name)} · ${[b(x.margin)&&'Margin',b(x.demand)&&'Demand',b(x.supplierOk)&&'Supplier'].filter(Boolean).map(t=>t+' ✓').join(' ')||'No checks yet'}</div></div>${b(x.done)?`<span class="chip">${x.sku}</span>`:`<button class="p2" onclick="en('${x.id}')">Enable</button>`}</div>`).join('')||'<p class="mu">No prospects yet</p>');
+const gen=(n,sub)=>()=>`<button class="p" onclick="form('${n}')">+ New</button>`+wrap(()=>fil(D[n]).map(r=>card(esc(r.name),sub(r),'',`onclick="form('${n}','${r.id}')"`)).join('')||'<p class="mu">Nothing here yet</p>');
+V.suppliers=gen('Suppliers',r=>esc(r.phone+' '+(r.products||'')));V.customers=gen('Customers',r=>esc(r.phone+' · '+(r.address||'')));
+V.inventory=()=>{const st=stock(),tv=Object.values(st).reduce((s,x)=>s+x.v,0);return `<div class="kp"><div><span class="mu">Stock value</span><b>${m(tv)}</b></div><div><span class="mu">SKUs</span><b>${D.SKU_Master.length}</b></div></div>`+wrap(()=>fil(D.SKU_Master,r=>r.sku+r.name).map(s=>{const x=st[s.sku]||{q:0,v:0},lo=s.reorder>0&&x.q<=s.reorder;return card(esc(s.name),`${s.sku} · value ${m(x.v)}`,`<b class="${lo?'bad':''}">${x.q}</b>${lo?'<br><span class="bad">reorder</span>':''}`)}).join(''))};
+V.profit=()=>{const ids=new Set(D.Orders.filter(o=>o.date>=P.f&&o.date<=P.t).map(o=>o.id)),ls=D.Order_Lines.filter(l=>ids.has(l.order)),pr=ls.reduce((s,l)=>s+ +l.profit,0),co=ls.reduce((s,l)=>s+ +l.cost,0),rv=pr+co,n=ids.size,k=m(Object.values(stock()).reduce((s,x)=>s+x.v,0));
+ const kp=(a,v)=>`<div><span class="mu">${a}</span><b>${v}</b></div>`;
+ return `<div class="r"><input type="date" value="${P.f}" onchange="P.f=this.value;render()"><input type="date" value="${P.t}" onchange="P.t=this.value;render()"></div><div class="r"><button class="g" onclick="pp('d')">Today</button><button class="g" onclick="pp('m')">Month</button><button class="g" onclick="pp('y')">Year</button><button class="g" onclick="pp('a')">All</button></div><div class="kp">${kp('Revenue',m(rv))}${kp('Cost (FIFO)',m(co))}${kp('Profit',m(pr))}${kp('Profit %',(rv?pr/rv*100:0).toFixed(1)+'%')}${kp('Orders',n)}${kp('Avg order',m(n?rv/n:0))}${kp('Stock value',k)}</div><p class="mu">Revenue is after discounts and excludes delivery charges.</p>`};
+function pp(k){const t=today();P={d:{f:t,t},m:{f:t.slice(0,8)+'01',t},y:{f:t.slice(0,5)+'01-01',t},a:{f:'2000-01-01',t}}[k];render()}
+V.settings=()=>{const n=Math.min(5,Math.max(2,+C.tabCount||3)),t=String(C.tabs||'home,orders,profit').split(',');
+ return `<h3>Bottom tabs</h3><label>Number of tabs<select onchange="cs('tabCount',this.value)">${[2,3,4,5].map(i=>`<option ${i==n?'selected':''}>${i}</option>`).join('')}</select></label>`+Array.from({length:n},(_,i)=>`<label>Tab ${i+1}<select onchange="ct(${i},this.value)">${Object.keys(SC).map(k=>`<option value="${k}" ${t[i]==k?'selected':''}>${SC[k]}</option>`).join('')}</select></label>`).join('')+`<h3>Backup</h3><button class="g" onclick="bk()">Back up now</button><h3>Connection</h3><button class="g" onclick="localStorage.clear();location.reload()">Reset connection</button>`};
+async function cs(k,v){try{await api('put',{sheet:'Config',row:{key:k,value:v}});await load()}catch(e){toast(e)}}
+function ct(i,v){const t=String(C.tabs||'home,orders,profit').split(',');while(t.length<=i)t.push('home');t[i]=v;cs('tabs',t.join(','))}
+async function bk(){if(!edit)return toast('Turn on Edit mode');try{await api('backup');toast('Backup copy saved to Drive')}catch(e){toast(e)}}
+if(!U||!T)$('#v').innerHTML=`<h3>Connect</h3><label>Web app URL<input id="u"></label><label>Secret token<input id="k"></label><button class="p" onclick="localStorage.u=$('#u').value.trim();localStorage.t=$('#k').value.trim();location.reload()">Connect</button>`;else load();
+if('serviceWorker' in navigator)navigator.serviceWorker.register('sw.js');
+</script></body></html>
